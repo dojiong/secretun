@@ -1,0 +1,19 @@
+{
+    "tunnel": {
+        "name": "tcp",
+        "encoders": [
+            {
+                "name": "zlib",
+                "level": 9
+            }
+        ],
+        "addr": "0.0.0.0:5555"
+    },
+    "auth": {
+        "users": "./users"
+    },
+    "nat": {
+        "net": "192.168.10.0/24",
+        "gateway": "192.168.10.1"
+    }
+}
