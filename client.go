@@ -49,6 +49,8 @@ func (c *Client) Init() error {
 }
 
 func (c *Client) Run() error {
+	defer c.cli_ch.Close()
+
 	if err := c.tunnel.Start(c.cli_ch); err != nil {
 		return err
 	}
@@ -109,9 +111,7 @@ func (c *Client) nat() error {
 	if err := tun.SetNetmask(c.nat_info.Netmask); err != nil {
 		return err
 	}
-	if err := tun.SetMTU(1400); err != nil {
-		return err
-	}
+
 	tun_ch, err := tun.ReadChan()
 	if err != nil {
 		return err

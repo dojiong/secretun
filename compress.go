@@ -14,8 +14,24 @@ type ZlibEncoder struct {
 func (z *ZlibEncoder) Init(cfg map[string]interface{}) error {
 	if ilevel, ok := cfg["level"]; !ok {
 		z.level = 6
-	} else if z.level, ok = ilevel.(int); !ok {
-		return fmt.Errorf("zlib.level invalid type (int desired)")
+	} else {
+		var level int
+		switch v := ilevel.(type) {
+		case int:
+			level = v
+		case int64:
+			level = int(v)
+		case float32:
+			level = int(v)
+		case float64:
+			level = int(v)
+		default:
+			return fmt.Errorf("zlib.level invalid type (int desired) %t", ilevel)
+		}
+		if level < zlib.NoCompression || level > zlib.BestCompression {
+			return fmt.Errorf("zlib.level invalid")
+		}
+		z.level = level
 	}
 
 	return nil

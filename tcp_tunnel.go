@@ -5,23 +5,27 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 )
 
 type RawTCP_ST struct {
 	conn     net.Listener
-	encoders []Encoder
+	encoders Encoders
 }
 
 type RawTCP_CT struct {
 	conn     net.Conn
-	encoders []Encoder
+	encoders Encoders
 }
 
-func packetTunnel(encoders []Encoder, conn net.Conn, cli_ch ClientChan) {
+func packetTunnel(encoders Encoders, conn net.Conn, cli_ch ClientChan) {
+
 	go func() {
+		var err error
 		var size uint16
 		var header [3]byte
+
 		for {
 			if _, err := io.ReadFull(conn, header[:]); err != nil {
 				cli_ch.End <- err
@@ -30,8 +34,13 @@ func packetTunnel(encoders []Encoder, conn net.Conn, cli_ch ClientChan) {
 			size = binary.BigEndian.Uint16(header[1:])
 			packet := new(Packet)
 			packet.Type = header[0]
-			packet.Data = make([]byte, size)
-			if _, err := io.ReadFull(conn, packet.Data); err != nil {
+			buf := make([]byte, size)
+			if _, err = io.ReadFull(conn, buf); err != nil {
+				cli_ch.End <- err
+				return
+			}
+			if packet.Data, err = encoders.Decode(buf); err != nil {
+				log.Println(err)
 				cli_ch.End <- err
 				return
 			}
@@ -44,14 +53,21 @@ func packetTunnel(encoders []Encoder, conn net.Conn, cli_ch ClientChan) {
 			if !ok {
 				return
 			}
-			size := len(packet.Data)
-			buf := make([]byte, 0, 3+len(packet.Data))
+			data, err := encoders.Encode(packet.Data)
+			if err != nil {
+				log.Println(err)
+				cli_ch.End <- err
+				return
+			}
+
+			size := len(data)
+			buf := make([]byte, 0, 3+len(data))
 			w := bytes.NewBuffer(buf)
 			w.WriteByte(packet.Type)
 			w.WriteByte(byte(size >> 8))
 			w.WriteByte(byte(size & 0xFF))
-			w.Write(packet.Data)
-			if _, err := conn.Write(w.Bytes()); err != nil {
+			w.Write(data)
+			if _, err = conn.Write(w.Bytes()); err != nil {
 				cli_ch.End <- err
 				return
 			}
@@ -60,6 +76,16 @@ func packetTunnel(encoders []Encoder, conn net.Conn, cli_ch ClientChan) {
 }
 
 func (t *RawTCP_ST) Init(cfg map[string]interface{}) (err error) {
+	if iencoders, ok := cfg["encoders"]; !ok {
+		return fmt.Errorf("tcptunnel missing encoders")
+	} else if encoders, ok := iencoders.([]interface{}); !ok {
+		return fmt.Errorf("tcptunnel.encoders invalid type ([]interface{} desired)")
+	} else {
+		if t.encoders, err = GetEncoders(encoders); err != nil {
+			return err
+		}
+	}
+
 	if iaddr, ok := cfg["addr"]; !ok {
 		return fmt.Errorf("missing `tunnel.addr`")
 	} else if addr, ok := iaddr.(string); !ok {
@@ -100,6 +126,16 @@ func (t *RawTCP_ST) Shutdown() error {
 }
 
 func (t *RawTCP_CT) Init(cfg map[string]interface{}) (err error) {
+	if iencoders, ok := cfg["encoders"]; !ok {
+		return fmt.Errorf("tcptunnel missing encoders")
+	} else if encoders, ok := iencoders.([]interface{}); !ok {
+		return fmt.Errorf("tcptunnel.encoders invalid type ([]interface{} desired)")
+	} else {
+		if t.encoders, err = GetEncoders(encoders); err != nil {
+			return err
+		}
+	}
+
 	if iaddr, ok := cfg["addr"]; !ok {
 		return fmt.Errorf("missing `tunnel.addr`")
 	} else if addr, ok := iaddr.(string); !ok {

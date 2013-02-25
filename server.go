@@ -98,6 +98,8 @@ func (s *Server) Shutdown() error {
 }
 
 func (s *Server) handle_client(cli_ch ClientChan) {
+	defer cli_ch.Close()
+
 	nat_info, err := s.auth(&cli_ch)
 	if err != nil {
 		log.Println(err)
@@ -156,9 +158,7 @@ func (s *Server) nat(cli_ch *ClientChan, nat_info NatInfo) error {
 	if err := tun.SetNetmask(nat_info.Netmask); err != nil {
 		return err
 	}
-	if err := tun.SetMTU(1400); err != nil {
-		return err
-	}
+
 	tun_ch, err := tun.ReadChan()
 	if err != nil {
 		return err
