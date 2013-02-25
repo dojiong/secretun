@@ -111,6 +111,11 @@ func (c *Client) nat() error {
 	if err := tun.SetNetmask(c.nat_info.Netmask); err != nil {
 		return err
 	}
+	if c.nat_info.MTU > 0 {
+		if err := tun.SetMTU(c.nat_info.MTU); err != nil {
+			return err
+		}
+	}
 
 	tun_ch, err := tun.ReadChan()
 	if err != nil {

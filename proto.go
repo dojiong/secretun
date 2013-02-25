@@ -13,6 +13,7 @@ type NatInfo struct {
 	IP      net.IP
 	Gateway net.IP
 	Netmask net.IPMask
+	MTU     int
 }
 
 type AuthResult struct {

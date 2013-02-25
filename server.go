@@ -13,6 +13,7 @@ type Server struct {
 	cfg    map[string]map[string]interface{}
 	tunnel ServerTunnel
 	ippool IPPool
+	mtu    int
 }
 
 func NewServer(cfg map[string]map[string]interface{}) (ser Server, err error) {
@@ -52,6 +53,28 @@ func NewServer(cfg map[string]map[string]interface{}) (ser Server, err error) {
 		ser.ippool, err = NewIPPool(net, gateway)
 		if err != nil {
 			return
+		}
+
+		if imtu, ok := nat_cfg["mtu"]; ok {
+			switch v := imtu.(type) {
+			case int:
+				ser.mtu = v
+			case int64:
+				ser.mtu = int(v)
+			case float32:
+				ser.mtu = int(v)
+			case float64:
+				ser.mtu = int(v)
+			default:
+				err = fmt.Errorf("nat.mtu invalid type (int desired)")
+				return
+			}
+			if ser.mtu < 0 {
+				err = fmt.Errorf("nat.mtu must be a positive int")
+				return
+			}
+		} else {
+			ser.mtu = 0
 		}
 	}
 
@@ -132,6 +155,7 @@ func (s *Server) auth(cli_ch *ClientChan) (nf NatInfo, err error) {
 		rst.NatInfo.Gateway = s.ippool.Gateway
 		rst.NatInfo.Netmask = s.ippool.IPNet.Mask
 		rst.NatInfo.IP = s.ippool.Next()
+		rst.NatInfo.MTU = s.mtu
 		nf = rst.NatInfo
 	}
 
@@ -157,6 +181,11 @@ func (s *Server) nat(cli_ch *ClientChan, nat_info NatInfo) error {
 	}
 	if err := tun.SetNetmask(nat_info.Netmask); err != nil {
 		return err
+	}
+	if s.mtu > 0 {
+		if err := tun.SetMTU(s.mtu); err != nil {
+			return err
+		}
 	}
 
 	tun_ch, err := tun.ReadChan()
