@@ -13,18 +13,18 @@ type Encoder interface {
 
 type Encoders []Encoder
 
-var encoders = map[string]reflect.Type{}
+var registered_encoders = map[string]reflect.Type{}
 
 func RegisterEncoder(name string, i interface{}) {
 	t := reflect.TypeOf(i)
 	if _, ok := reflect.New(t).Interface().(Encoder); !ok {
 		panic(fmt.Errorf("invalid encoder: %s", name))
 	}
-	encoders[name] = t
+	registered_encoders[name] = t
 }
 
 func NewEncoder(name string) (en Encoder, err error) {
-	if t, ok := encoders[name]; !ok {
+	if t, ok := registered_encoders[name]; !ok {
 		err = fmt.Errorf("can't find encoder: %s", name)
 		return
 	} else {
@@ -34,7 +34,7 @@ func NewEncoder(name string) (en Encoder, err error) {
 }
 
 func GetEncoders(cfg []interface{}) (Encoders, error) {
-	encoders := make([]Encoder, 0, len(cfg))
+	registered_encoders := make([]Encoder, 0, len(cfg))
 	for _, ic := range cfg {
 		if en_cfg, ok := ic.(map[string]interface{}); !ok {
 			return nil, fmt.Errorf("invalid encoder configure (map[string]interface{} desired)")
@@ -48,11 +48,11 @@ func GetEncoders(cfg []interface{}) (Encoders, error) {
 			} else if err := encoder.Init(en_cfg); err != nil {
 				return nil, err
 			} else {
-				encoders = append(encoders, encoder)
+				registered_encoders = append(registered_encoders, encoder)
 			}
 		}
 	}
-	return encoders, nil
+	return registered_encoders, nil
 }
 
 func (es Encoders) Encode(data []byte) (d []byte, err error) {

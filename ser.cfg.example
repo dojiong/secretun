@@ -1,13 +1,15 @@
 {
     "tunnel": {
         "name": "tcp",
+        "addr": "0.0.0.0:5555"
+    },
+    "packet": {
         "encoders": [
             {
                 "name": "zlib",
                 "level": 9
             }
-        ],
-        "addr": "0.0.0.0:5555"
+        ]
     },
     "auth": {
         "users": "./users"

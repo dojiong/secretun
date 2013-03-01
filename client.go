@@ -16,6 +16,10 @@ func NewClient(cfg map[string]map[string]interface{}) (cli Client, err error) {
 	var name interface{}
 
 	cli.cfg = cfg
+	if err = InitPacket(cfg); err != nil {
+		return
+	}
+
 	if _, ok := cfg["auth"]; !ok {
 		err = fmt.Errorf("missing `auth`")
 		return
@@ -134,7 +138,8 @@ func (c *Client) nat() error {
 			}
 			if packet.Type == PT_P2P {
 				if _, err := tun.Write(packet.Data); err != nil {
-					return err
+					log.Println("data:", packet.Data, err)
+					//return err
 				}
 			} else {
 				log.Println("end")

@@ -20,6 +20,10 @@ func NewServer(cfg map[string]map[string]interface{}) (ser Server, err error) {
 	var name interface{}
 
 	ser.cfg = cfg
+	if err = InitPacket(cfg); err != nil {
+		return
+	}
+
 	if auth_cfg, ok := cfg["auth"]; !ok {
 		err = fmt.Errorf("missing `auth`")
 		return
