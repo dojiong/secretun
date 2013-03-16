@@ -262,9 +262,15 @@ func convertStruct(in interface{}, val reflect.Value) *ConfigError {
 			return &ConfigError{ErrInvalidType, ""}
 		}
 
-		convertor := convertFuncs.get(to.Kind())
-		if convertor == nil {
-			return &ConfigError{ErrInvalidType, ""}
+		var convertor ConvertFunc
+
+		if _, ok := to.Interface().(Config); ok {
+			convertor = convertConfig
+		} else {
+			convertor = convertFuncs.get(to.Kind())
+			if convertor == nil {
+				return &ConfigError{ErrInvalidType, ""}
+			}
 		}
 
 		if err := convertor(from, to); err != nil {
