@@ -44,7 +44,12 @@ func NewConfigError(errno int, field string) *ConfigError {
 type ConvertFunc func(interface{}, reflect.Value) *ConfigError
 type ConvertFuncs []ConvertFunc
 
-func (c ConvertFuncs) get(kind reflect.Kind) ConvertFunc {
+func (c ConvertFuncs) get(val reflect.Value) ConvertFunc {
+	if _, ok := val.Interface().(Config); ok {
+		return convertConfig
+	}
+
+	kind := val.Kind()
 	if kind > reflect.Kind(len(c)) {
 		return nil
 	}
@@ -121,7 +126,7 @@ func (c *Config) Get(name string, dest interface{}) error {
 		return NewConfigError(ErrMissing, c.Name+"."+name)
 	} else {
 		val := reflect.ValueOf(dest).Elem()
-		if convertor := convertFuncs.get(val.Kind()); convertor == nil {
+		if convertor := convertFuncs.get(val); convertor == nil {
 			return NewConfigError(ErrInvalidType, c.Name+"."+name)
 		} else if err := convertor(obj, val); err != nil {
 			if len(err.Field) > 0 {
@@ -216,13 +221,9 @@ func convertSlice(in interface{}, val reflect.Value) *ConfigError {
 		var convertor ConvertFunc
 
 		ele := reflect.MakeSlice(val.Type(), 1, 1).Index(0)
-		if _, ok := ele.Interface().(Config); ok {
-			convertor = convertConfig
-		} else {
-			convertor = convertFuncs.get(ele.Kind())
-			if convertor == nil {
-				return &ConfigError{ErrInvalidType, ""}
-			}
+		convertor = convertFuncs.get(ele)
+		if convertor == nil {
+			return &ConfigError{ErrInvalidType, ""}
 		}
 
 		ary := reflect.MakeSlice(val.Type(), len(iary), len(iary))
@@ -262,15 +263,9 @@ func convertStruct(in interface{}, val reflect.Value) *ConfigError {
 			return &ConfigError{ErrInvalidType, ""}
 		}
 
-		var convertor ConvertFunc
-
-		if _, ok := to.Interface().(Config); ok {
-			convertor = convertConfig
-		} else {
-			convertor = convertFuncs.get(to.Kind())
-			if convertor == nil {
-				return &ConfigError{ErrInvalidType, ""}
-			}
+		convertor := convertFuncs.get(to)
+		if convertor == nil {
+			return &ConfigError{ErrInvalidType, ""}
 		}
 
 		if err := convertor(from, to); err != nil {
