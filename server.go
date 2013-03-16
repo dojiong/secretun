@@ -9,104 +9,60 @@ import (
 	"strings"
 )
 
-type Server struct {
-	cfg    map[string]map[string]interface{}
-	tunnel ServerTunnel
-	ippool IPPool
-	mtu    int
+type userConfig struct {
+	Users string
 }
 
-func NewServer(cfg map[string]map[string]interface{}) (ser Server, err error) {
-	var name interface{}
+type natConfig struct {
+	Net     string
+	Gateway string
+	Mtu     int
+}
 
+type Server struct {
+	cfg        Config
+	user_cfg   userConfig
+	nat_cfg    natConfig
+	tunnel_cfg Config
+
+	tunnel ServerTunnel
+	ippool IPPool
+}
+
+func NewServer(cfg Config) (ser Server, err error) {
 	ser.cfg = cfg
-	if err = InitPacket(cfg); err != nil {
+	if pkg_cfg, e := cfg.GetConfig("packet"); e != nil {
+		err = e
+		return
+	} else if err = InitPacket(pkg_cfg); err != nil {
 		return
 	}
 
-	if auth_cfg, ok := cfg["auth"]; !ok {
-		err = fmt.Errorf("missing `auth`")
-		return
-	} else if users, ok := auth_cfg["users"]; !ok {
-		err = fmt.Errorf("missing `ath.users`")
-		return
-	} else if _, ok := users.(string); !ok {
-		err = fmt.Errorf("auth.users type invalid (string desired)")
+	if err = cfg.Get("auth", &ser.user_cfg); err != nil {
 		return
 	}
 
-	if nat_cfg, ok := cfg["nat"]; !ok {
-		err = fmt.Errorf("missing `nat`")
+	if err = cfg.Get("nat", &ser.nat_cfg); err != nil {
 		return
-	} else {
-		var net, gateway string
-		if inet, ok := nat_cfg["net"]; !ok {
-			err = fmt.Errorf("missing `nat.net`")
-			return
-		} else if net, ok = inet.(string); !ok {
-			err = fmt.Errorf("nat.net type invalid (string desired)")
-			return
-		}
-		if igw, ok := nat_cfg["gateway"]; !ok {
-			err = fmt.Errorf("missing `nat.gateway`")
-			return
-		} else if gateway, ok = igw.(string); !ok {
-			err = fmt.Errorf("nat.gateway type invalid (string desired)")
-			return
-		}
-		ser.ippool, err = NewIPPool(net, gateway)
-		if err != nil {
-			return
-		}
-
-		if imtu, ok := nat_cfg["mtu"]; ok {
-			switch v := imtu.(type) {
-			case int:
-				ser.mtu = v
-			case int64:
-				ser.mtu = int(v)
-			case float32:
-				ser.mtu = int(v)
-			case float64:
-				ser.mtu = int(v)
-			default:
-				err = fmt.Errorf("nat.mtu invalid type (int desired)")
-				return
-			}
-			if ser.mtu < 0 {
-				err = fmt.Errorf("nat.mtu must be a positive int")
-				return
-			}
-		} else {
-			ser.mtu = 0
-		}
+	}
+	if ser.ippool, err = NewIPPool(ser.nat_cfg.Net, ser.nat_cfg.Gateway); err != nil {
+		return
 	}
 
-	tunnel_cfg, ok := cfg["tunnel"]
-	if !ok {
-		err = fmt.Errorf("missing `tunnel`")
+	var tunnel_name string
+	if ser.tunnel_cfg, err = cfg.GetConfig("tunnel"); err != nil {
 		return
-	}
-	name, ok = tunnel_cfg["name"]
-	if !ok {
-		err = fmt.Errorf("missing `tunnel.name`")
+	} else if err = ser.tunnel_cfg.Get("name", &tunnel_name); err != nil {
 		return
-	} else {
-		if _, ok = name.(string); !ok {
-			err = fmt.Errorf("tunnel.name is not a string")
-			return
-		}
 	}
 
-	if ser.tunnel, err = NewServerTunnel(name.(string)); err != nil {
-		return
-	}
+	ser.tunnel, err = NewServerTunnel(tunnel_name)
 
 	return
 }
 
 func (s *Server) Init() error {
-	return s.tunnel.Init(s.cfg["tunnel"])
+	return s.tunnel.Init(s.tunnel_cfg)
 }
 
 func (s *Server) Run() error {
@@ -159,7 +115,7 @@ func (s *Server) auth(cli_ch *ClientChan) (nf NatInfo, err error) {
 		rst.NatInfo.Gateway = s.ippool.Gateway
 		rst.NatInfo.Netmask = s.ippool.IPNet.Mask
 		rst.NatInfo.IP = s.ippool.Next()
-		rst.NatInfo.MTU = s.mtu
+		rst.NatInfo.MTU = s.nat_cfg.Mtu
 		nf = rst.NatInfo
 	}
 
@@ -186,8 +142,8 @@ func (s *Server) nat(cli_ch *ClientChan, nat_info NatInfo) error {
 	if err := tun.SetNetmask(nat_info.Netmask); err != nil {
 		return err
 	}
-	if s.mtu > 0 {
-		if err := tun.SetMTU(s.mtu); err != nil {
+	if s.nat_cfg.Mtu > 0 {
+		if err := tun.SetMTU(s.nat_cfg.Mtu); err != nil {
 			return err
 		}
 	}
@@ -230,7 +186,7 @@ func (s *Server) nat(cli_ch *ClientChan, nat_info NatInfo) error {
 }
 
 func (s *Server) check_user(info *AuthInfo) bool {
-	f, err := os.Open(s.cfg["auth"]["users"].(string))
+	f, err := os.Open(s.user_cfg.Users)
 	if err != nil {
 		return false
 	}

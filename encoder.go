@@ -6,7 +6,7 @@ import (
 )
 
 type Encoder interface {
-	Init(map[string]interface{}) error
+	Init(Config) error
 	Encode([]byte) ([]byte, error)
 	Decode([]byte) ([]byte, error)
 }
@@ -33,26 +33,23 @@ func NewEncoder(name string) (en Encoder, err error) {
 	return
 }
 
-func GetEncoders(cfg []interface{}) (Encoders, error) {
-	registered_encoders := make([]Encoder, 0, len(cfg))
-	for _, ic := range cfg {
-		if en_cfg, ok := ic.(map[string]interface{}); !ok {
-			return nil, fmt.Errorf("invalid encoder configure (map[string]interface{} desired)")
-		} else if iname, ok := en_cfg["name"]; !ok {
-			return nil, fmt.Errorf("encoder configure missing `name`")
-		} else if name, ok := iname.(string); !ok {
-			return nil, fmt.Errorf("encoder.name invalid type (string desired)")
+func GetEncoders(cfgs []Config) (Encoders, error) {
+	encoders := make([]Encoder, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		var name string
+		if err := cfg.Get("name", &name); err != nil {
+			return nil, err
+		}
+
+		if encoder, err := NewEncoder(name); err != nil {
+			return nil, err
+		} else if err := encoder.Init(cfg); err != nil {
+			return nil, err
 		} else {
-			if encoder, err := NewEncoder(name); err != nil {
-				return nil, err
-			} else if err := encoder.Init(en_cfg); err != nil {
-				return nil, err
-			} else {
-				registered_encoders = append(registered_encoders, encoder)
-			}
+			encoders = append(encoders, encoder)
 		}
 	}
-	return registered_encoders, nil
+	return encoders, nil
 }
 
 func (es Encoders) Encode(data []byte) (d []byte, err error) {

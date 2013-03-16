@@ -25,13 +25,13 @@ func (c *ClientChan) Close() {
 }
 
 type ClientTunnel interface {
-	Init(map[string]interface{}) error
+	Init(Config) error
 	Start(ClientChan) error
 	Shutdown() error
 }
 
 type ServerTunnel interface {
-	Init(map[string]interface{}) error
+	Init(Config) error
 	Accept() (ClientChan, error)
 	Shutdown() error
 }

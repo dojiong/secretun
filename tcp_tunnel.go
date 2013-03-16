@@ -3,8 +3,8 @@ package secretun
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
+	"log"
 	"net"
 )
 
@@ -68,19 +68,17 @@ func packetTunnel(conn net.Conn, cli_ch ClientChan) {
 	}()
 }
 
-func (t *RawTCP_ST) Init(cfg map[string]interface{}) (err error) {
-	if iaddr, ok := cfg["addr"]; !ok {
-		return fmt.Errorf("missing `tunnel.addr`")
-	} else if addr, ok := iaddr.(string); !ok {
-		return fmt.Errorf("tunnel.addr invalid type (string desired)")
-	} else {
-		t.conn, err = net.Listen("tcp", addr)
-		if err != nil {
-			return err
-		}
+func (t *RawTCP_ST) Init(cfg Config) (err error) {
+	var addr string
+
+	if err = cfg.Get("addr", &addr); err != nil {
+		return
 	}
 
-	return nil
+	log.Println("listen on ", addr)
+	t.conn, err = net.Listen("tcp", addr)
+
+	return
 }
 
 func (t *RawTCP_ST) Accept() (cli_ch ClientChan, err error) {
@@ -108,27 +106,25 @@ func (t *RawTCP_ST) Shutdown() error {
 	return nil
 }
 
-func (t *RawTCP_CT) Init(cfg map[string]interface{}) (err error) {
-	if iaddr, ok := cfg["addr"]; !ok {
-		return fmt.Errorf("missing `tunnel.addr`")
-	} else if addr, ok := iaddr.(string); !ok {
-		return fmt.Errorf("tunnel.addr invalid type (string desired)")
-	} else {
-		t.conn, err = net.Dial("tcp", addr)
-		if err != nil {
-			return
-		}
-		err = t.conn.(*net.TCPConn).SetNoDelay(true)
-		if err != nil {
-			return
-		}
-		err = t.conn.(*net.TCPConn).SetKeepAlive(true)
-		if err != nil {
-			return
-		}
+func (t *RawTCP_CT) Init(cfg Config) (err error) {
+	var addr string
+	if err = cfg.Get("addr", &addr); err != nil {
+		return
 	}
 
-	return nil
+	log.Println("connect to ", addr)
+
+	if t.conn, err = net.Dial("tcp", addr); err != nil {
+		return
+	}
+
+	if err = t.conn.(*net.TCPConn).SetNoDelay(true); err != nil {
+		return
+	}
+
+	err = t.conn.(*net.TCPConn).SetKeepAlive(true)
+
+	return
 }
 
 func (t *RawTCP_CT) Start(cli_ch ClientChan) error {

@@ -2,8 +2,7 @@ package secretun
 
 import (
 	"bytes"
-	gob "encoding/gob"
-	"fmt"
+	"encoding/gob"
 )
 
 const (
@@ -75,18 +74,15 @@ func NewPacket(t uint8, e interface{}) (pack *Packet) {
 	return pack
 }
 
-func InitPacket(cfg map[string]map[string]interface{}) error {
-	if pkg_cfg, ok := cfg["packet"]; !ok {
-		return fmt.Errorf("missing `packet`")
-	} else if iencoders, ok := pkg_cfg["encoders"]; !ok {
-		return fmt.Errorf("missing `packet.encoders`")
-	} else if encoders_cfg, ok := iencoders.([]interface{}); !ok {
-		return fmt.Errorf("encoders invalid type ([]interface{} desired)")
-	} else {
-		var err error
-		if encoders, err = GetEncoders(encoders_cfg); err != nil {
-			return err
-		}
+func InitPacket(cfg Config) (err error) {
+	var encoders_cfg []Config
+	if err := cfg.Get("encoders", &encoders_cfg); err != nil {
+		return err
 	}
+
+	if encoders, err = GetEncoders(encoders_cfg); err != nil {
+		return err
+	}
+
 	return nil
 }

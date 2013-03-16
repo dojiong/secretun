@@ -5,55 +5,57 @@ import (
 	"log"
 )
 
+type authConfig struct {
+	Username string
+	Password string
+}
+
 type Client struct {
-	cfg      map[string]map[string]interface{}
+	cfg      Config
 	tunnel   ClientTunnel
 	cli_ch   ClientChan
 	nat_info NatInfo
+
+	auth_cfg   authConfig
+	tunnel_cfg Config
 }
 
-func NewClient(cfg map[string]map[string]interface{}) (cli Client, err error) {
-	var name interface{}
-
+func NewClient(cfg Config) (cli Client, err error) {
 	cli.cfg = cfg
-	if err = InitPacket(cfg); err != nil {
+	if pkg_cfg, e := cfg.GetConfig("packet"); e != nil {
+		err = e
+		return
+	} else if err = InitPacket(pkg_cfg); err != nil {
 		return
 	}
 
-	if _, ok := cfg["auth"]; !ok {
-		err = fmt.Errorf("missing `auth`")
+	if err = cfg.Get("auth", &cli.auth_cfg); err != nil {
 		return
 	}
 
-	tunnel_cfg, ok := cfg["tunnel"]
-	if !ok {
-		err = fmt.Errorf("missing `tunnel`")
+	var tunnel_name string
+	if cli.tunnel_cfg, err = cfg.GetConfig("tunnel"); err != nil {
+		return
+	} else if err = cli.tunnel_cfg.Get("name", &tunnel_name); err != nil {
 		return
 	}
-	name, ok = tunnel_cfg["name"]
-	if !ok {
-		err = fmt.Errorf("missing `tunnel.name`")
+	if cli.tunnel, err = NewClientTunnel(tunnel_name); err != nil {
 		return
-	} else {
-		if _, ok = name.(string); !ok {
-			err = fmt.Errorf("tunnel.name is not a string")
-			return
-		}
 	}
 
-	if cli.tunnel, err = NewClientTunnel(name.(string)); err != nil {
-		return
-	}
 	cli.cli_ch = NewClientChan()
+
 	return
 }
 
 func (c *Client) Init() error {
-	return c.tunnel.Init(c.cfg["tunnel"])
+	return c.tunnel.Init(c.tunnel_cfg)
 }
 
 func (c *Client) Run() error {
 	defer c.cli_ch.Close()
+
+	log.Println("client running")
 
 	if err := c.tunnel.Start(c.cli_ch); err != nil {
 		return err
@@ -70,22 +72,9 @@ func (c *Client) Shutdown() error {
 }
 
 func (c *Client) auth() error {
-	var user, passwd interface{}
-	var ok bool
 	var rst AuthResult
 
-	if user, ok = c.cfg["auth"]["username"]; !ok {
-		return fmt.Errorf("missing `username`")
-	} else if _, ok = user.(string); !ok {
-		return fmt.Errorf("invalid username type (string desired)")
-	}
-	if passwd, ok = c.cfg["auth"]["password"]; !ok {
-		return fmt.Errorf("missing `password`")
-	} else if _, ok = passwd.(string); !ok {
-		return fmt.Errorf("invalid password type (string desired)")
-	}
-
-	p := NewPacket(PT_AUTH, &AuthInfo{user.(string), passwd.(string)})
+	p := NewPacket(PT_AUTH, &AuthInfo{c.auth_cfg.Username, c.auth_cfg.Password})
 	c.cli_ch.W <- p
 	p = <-c.cli_ch.R
 	if p.Decode(&rst) != nil {
