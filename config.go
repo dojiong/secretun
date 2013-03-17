@@ -121,6 +121,11 @@ func (c *Config) GetConfig(name string) (cfg Config, err error) {
 	return
 }
 
+func (c *Config) Has(name string) bool {
+	_, ok := c.Map[name]
+	return ok
+}
+
 func (c *Config) Get(name string, dest interface{}) error {
 	if obj, ok := c.Map[name]; !ok {
 		return NewConfigError(ErrMissing, c.Name+"."+name)
@@ -139,6 +144,14 @@ func (c *Config) Get(name string, dest interface{}) error {
 	}
 
 	return nil
+}
+
+func (c *Config) GetBool(name string) bool {
+	var b bool
+	if err := c.Get(name, &b); err != nil {
+		return false
+	}
+	return b
 }
 
 func convertBool(in interface{}, val reflect.Value) *ConfigError {
